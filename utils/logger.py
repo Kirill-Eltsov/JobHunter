@@ -1,15 +1,16 @@
 import logging
 import os
 
+cwd = os.getcwd()
 # Создаем директорию для логов, если она не существует
-log_directory = "utils/logs"
+log_directory = cwd + "/utils/logs"
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
 
 # Настройка логирования
 logging.basicConfig(
     filename=os.path.join(log_directory, 'bot.log'),  # Путь к файлу лога
-    level=logging.WARNING,  # Уровень логирования
+    level=logging.INFO,  # Уровень логирования
     format='%(asctime)s - %(levelname)s - %(message)s',  # Формат сообщений
     datefmt='%Y-%m-%d %H:%M:%S'  # Формат даты и времени
 )

@@ -20,7 +20,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     log_warning(f"Пользователь запустил бота.")
-
     await update.message.reply_html(text=welcome_message, reply_markup=reply_markup)
 
 
