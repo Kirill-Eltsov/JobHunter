@@ -3,6 +3,9 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 import os
 from dotenv import load_dotenv, dotenv_values
 
+from utils.logger import log_warning
+
+
 load_dotenv()
 
 TOKEN = os.getenv('TOKEN')
@@ -23,6 +26,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("История поиска", callback_data='search_history')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    log_warning(f"Пользователь запустил бота.")
+
     await update.message.reply_html(text=welcome_message, reply_markup=reply_markup)
 
 
@@ -34,5 +39,4 @@ def main():
 
 
 if __name__ == '__main__':
-    print(TOKEN)
     main()
