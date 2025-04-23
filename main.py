@@ -1,14 +1,7 @@
 from telegram import Update, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
-import os
-from dotenv import load_dotenv, dotenv_values
-
 from utils.logger import log_warning
-
-
-load_dotenv()
-
-TOKEN = os.getenv('TOKEN')
+from config import TOKEN
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
