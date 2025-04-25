@@ -5,13 +5,19 @@ from utils.logger import log_info, log_error
 
 
 
-async def fetch_vacancies(keyword, area=None, per_page=5):
+async def fetch_vacancies(keyword, area=None, salary_from=None, salary_to=None, per_page=5):
     """Асинхронное получение вакансий с hh.ru по заданным параметрам."""
     params = {
         "text": keyword,
         "area": area if area else SEARCH_PARAMS["area"],
-        "per_page": SEARCH_PARAMS["per_page"]
+        "per_page": per_page if per_page else SEARCH_PARAMS["per_page"]
     }
+    
+    # Добавляем параметры зарплаты, если они указаны
+    if salary_from:
+        params["salary_from"] = salary_from
+    if salary_to:
+        params["salary_to"] = salary_to
 
     log_info(f"Запрос вакансий с параметрами: {params}")
 
