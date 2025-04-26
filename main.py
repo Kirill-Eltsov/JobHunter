@@ -6,8 +6,12 @@ from handlers.start_handler import (
     CITY, POSITION, SALARY
 )
 from utils.logger import log_warning
-from config import TOKEN
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+
+TOKEN = os.getenv('MY_TOKEN')
 
 def main():
     """Запускает бота."""
