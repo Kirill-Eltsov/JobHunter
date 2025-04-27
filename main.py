@@ -2,8 +2,8 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler
 from handlers.start_handler import (
     start, button_handler, city_selection_handler, handle_position_selection,
-    handle_position_input, salary_selection_handler, show_city_selection,
-    CITY, POSITION, SALARY
+    handle_position_input, salary_selection_handler, show_city_selection, number_of_vacancies_handler,
+    CITY, POSITION, SALARY, NUMBER_OF_VACANCIES
 )
 from utils.logger import log_warning
 import os
@@ -32,6 +32,9 @@ def main():
             ],
             SALARY: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, salary_selection_handler),
+            ],
+            NUMBER_OF_VACANCIES: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, number_of_vacancies_handler),
             ],
         },
         fallbacks=[CommandHandler("start", start)],

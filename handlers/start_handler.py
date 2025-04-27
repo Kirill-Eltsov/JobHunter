@@ -4,7 +4,7 @@ from utils.logger import log_warning, log_info, log_error
 from services.hh_service import fetch_vacancies, parse_vacancies
 
 # Определение состояний для ConversationHandler
-CITY, POSITION, SALARY, SEARCH = range(4)
+CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH = range(5)
 
 # Предопределенные города
 CITIES = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"]
@@ -170,10 +170,35 @@ async def salary_selection_handler(update: Update, context: ContextTypes.DEFAULT
 
     await update.message.reply_text(f"Вы выбрали желаемую зарплату: {salary}")
 
-    # Запускаем поиск вакансий
-    await search_vacancies(update, context)
-    return ConversationHandler.END
+    # # Запускаем поиск вакансий
+    # await search_vacancies(update, context)
+    # return ConversationHandler.END
+    await show_number_of_vacancies_selection(update, context)
+    return NUMBER_OF_VACANCIES
 
+
+async def show_number_of_vacancies_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать выбор количества вакансий."""
+    keyboard = [
+        [KeyboardButton("1")],
+        [KeyboardButton("2")],
+        [KeyboardButton("3")],
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    await update.message.reply_text("Пожалуйста, выберите количество вакансий (1-3):", reply_markup=reply_markup)
+
+async def number_of_vacancies_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик выбора количества вакансий."""
+    number_of_vacancies = update.message.text
+
+    if number_of_vacancies in ["1", "2", "3"]:
+        context.user_data['number_of_vacancies'] = int(number_of_vacancies)
+        await update.message.reply_text(f"Вы выбрали {number_of_vacancies} вакансий.")
+        await search_vacancies(update, context)
+        return ConversationHandler.END
+    else:
+        await update.message.reply_text("Пожалуйста, выберите корректное количество вакансий (1-3).")
+        return NUMBER_OF_VACANCIES
 
 async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Поиск вакансий на основе выбранных параметров."""
@@ -181,6 +206,7 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     city_id = context.user_data.get('city_id', None)
     position = context.user_data.get('position', 'Не указана')
     salary_range = context.user_data.get('salary', 'Не указана')
+    number_of_vacancies = context.user_data.get('number_of_vacancies', 3)  # По умолчанию 3
 
     await update.message.reply_text(f"Ищем вакансии по следующим параметрам:\n"
                                     f"Город: {city}\n"
@@ -204,7 +230,7 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
             log_error(f"Ошибка при парсинге диапазона зарплаты: {salary_range}")
 
     # Получаем вакансии через API HH.ru
-    vacancies_data = await fetch_vacancies(position, city_id, salary_from, salary_to)
+    vacancies_data = await fetch_vacancies(position, city_id, salary_from, salary_to, per_page=number_of_vacancies)
 
     if not vacancies_data:
         await update.message.reply_text("К сожалению, не удалось получить вакансии. Попробуйте позже.")
