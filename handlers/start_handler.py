@@ -1,7 +1,8 @@
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler
 from utils.logger import log_warning, log_info, log_error
-from services.hh_service import fetch_vacancies, parse_vacancies
+from services.hh_service import fetch_vacancies, parse_vacancies, get_vacancies_stats
+from services.database import DatabaseHandler
 
 # Определение состояний для ConversationHandler
 CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH = range(5)
@@ -51,6 +52,32 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message_text == "Поиск вакансий":
         await show_city_selection(update, context)
         return CITY
+    elif message_text == "Аналитика":
+        position = context.user_data.get('position')
+        city_id = context.user_data.get('city_id')
+        
+        if not position or not city_id:
+            await update.message.reply_text("Сначала выполните поиск вакансий")
+            return ConversationHandler.END
+            
+        await update.message.reply_text("Собираем аналитику...")
+        
+        stats = await get_vacancies_stats(position, city_id, count=50)
+        
+        if stats['vacancies_count'] == 0:
+            await update.message.reply_text("Не удалось собрать аналитику")
+            return ConversationHandler.END
+            
+        message = (f"Аналитика по вакансиям:\n"
+                  f"Должность: {position}\n"
+                  f"Количество вакансий: {stats['vacancies_count']}\n"
+                  f"Средняя зарплата: {stats['avg_salary']} руб.\n"
+                  f"Минимальная зарплата: {stats['min_salary']} руб.\n"
+                  f"Максимальная зарплата: {stats['max_salary']} руб.")
+                  
+        await update.message.reply_text(message)
+        return ConversationHandler.END
+        
     elif message_text == "Избранное":
         await update.message.reply_text("Функция избранного пока не реализована.")
         return ConversationHandler.END
@@ -272,6 +299,7 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [KeyboardButton("Поиск вакансий")],
         [KeyboardButton("Избранное")],
+        [KeyboardButton("Аналитика")],
         [KeyboardButton("История поиска")],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)

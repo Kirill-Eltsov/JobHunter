@@ -1,7 +1,9 @@
 import aiohttp
 import asyncio
+import statistics
 from config import HH_API_URL, SEARCH_PARAMS
 from utils.logger import log_info, log_error
+from .database import DatabaseHandler
 
 
 
@@ -41,6 +43,7 @@ def parse_vacancies(data):
     vacancies = []
     for item in data['items']:
         vacancy = {
+            "id": str(item.get("id")),
             "title": item.get("name"),
             "url": item.get("alternate_url"),
             "salary": item.get("salary"),
@@ -52,6 +55,67 @@ def parse_vacancies(data):
 
     log_info(f"Парсинг завершен. Найдено {len(vacancies)} вакансий.")
     return vacancies
+
+async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
+    """Сбор статистики по вакансиям"""
+    params = {
+        "text": keyword,
+        "area": city,
+        "per_page": min(count, 100),  # API HH ограничивает 100 вакансий на страницу
+        "only_with_salary": True  # Получаем только вакансии с указанной зарплатой
+    }
+
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(HH_API_URL, params=params) as response:
+                response.raise_for_status()
+                data = await response.json()
+                
+                vacancies = parse_vacancies(data)
+                if not vacancies:
+                    return {
+                        "avg_salary": 0,
+                        "min_salary": 0,
+                        "max_salary": 0,
+                        "vacancies_count": 0
+                    }
+
+                # Собираем все зарплаты
+                all_salaries = []
+                for vacancy in vacancies:
+                    salary = vacancy.get("salary")
+                    if salary:
+                        from_salary = salary.get("from")
+                        to_salary = salary.get("to")
+                        if from_salary and to_salary:
+                            all_salaries.append((from_salary + to_salary) / 2)
+                        elif from_salary:
+                            all_salaries.append(from_salary)
+                        elif to_salary:
+                            all_salaries.append(to_salary)
+
+                if not all_salaries:
+                    return {
+                        "avg_salary": 0,
+                        "min_salary": 0,
+                        "max_salary": 0,
+                        "vacancies_count": 0
+                    }
+                
+                return {
+                    "avg_salary": round(statistics.mean(all_salaries), 2),
+                    "min_salary": min(all_salaries),
+                    "max_salary": max(all_salaries),
+                    "vacancies_count": len(vacancies)
+                }
+
+        except Exception as e:
+            log_error(f"Ошибка при сборе статистики: {e}")
+            return {
+                "avg_salary": 0,
+                "vacancies_count": 0,
+                "salary_distribution": []
+            }
 
 
 # Пример использования
