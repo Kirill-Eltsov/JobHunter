@@ -11,7 +11,7 @@ if not os.path.exists(log_directory):
 logging.basicConfig(
     filename=os.path.join(log_directory, 'bot.log'),  # Путь к файлу лога
     level=logging.INFO,  # Уровень логирования
-    format='%(asctime)s - %(levelname)s - %(message)s',  # Формат сообщений
+    format='%(asctime)s - %(levelname)s - %(message)s - %(lineno)d - %(funcName)s',  # Формат сообщений
     datefmt='%Y-%m-%d %H:%M:%S'  # Формат даты и времени
 )
 # Настройка уровня логирования для сторонних библиотек

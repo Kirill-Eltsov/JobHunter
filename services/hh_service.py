@@ -62,7 +62,7 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
         "text": keyword,
         "area": city,
         "per_page": min(count, 100),  # API HH ограничивает 100 вакансий на страницу
-        "only_with_salary": True  # Получаем только вакансии с указанной зарплатой
+        "only_with_salary": 1  # Получаем только вакансии с указанной зарплатой (error if set 'True')
     }
 
     async with aiohttp.ClientSession() as session:
