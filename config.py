@@ -1,9 +1,4 @@
-# import os
-# from dotenv import load_dotenv, dotenv_values
 
-# load_dotenv()
-
-# TOKEN = os.getenv('TOKEN')
 
 # Параметры для поиска вакансий
 SEARCH_PARAMS = {
@@ -14,3 +9,5 @@ SEARCH_PARAMS = {
 
 # URL API для получения вакансий с hh.ru
 HH_API_URL = "https://api.hh.ru/vacancies"
+
+OPEN_STREET_MAP_URL = "https://nominatim.openstreetmap.org/reverse"
