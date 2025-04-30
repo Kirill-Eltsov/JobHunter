@@ -159,6 +159,8 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
             }
 
 
+
+
 # Пример использования
 async def main():
     keyword = "devops"

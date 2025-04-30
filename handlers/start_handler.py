@@ -35,6 +35,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Создаем клавиатуру с кнопками
     keyboard = [
         [KeyboardButton("Поиск вакансий")],
+        [KeyboardButton("Определить местоположение", request_location=True)],
         [KeyboardButton("Избранное")],
         [KeyboardButton("История поиска")],
     ]
@@ -102,9 +103,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_city_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать пользователю выбор города для поиска вакансий."""
-    # Создаем клавиатуру с кнопками городов
+    # Создаем клавиатуру с кнопками городов и определением местоположения
     keyboard = [[KeyboardButton(city)] for city in CITIES]
     keyboard.append([KeyboardButton("Другой город")])
+    keyboard.append([KeyboardButton("Определить местоположение", request_location=True)])
 
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     await update.message.reply_text("Выберите город для поиска вакансий:", reply_markup=reply_markup)
@@ -112,17 +114,31 @@ async def show_city_selection(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def city_selection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора города."""
-    city = update.message.text
-
-    if city == "Другой город":
-        await update.message.reply_text("Пожалуйста, введите название города:")
-        context.user_data['awaiting_custom_city'] = True
-        return CITY
+    if update.message.location:
+        # Получаем координаты
+        lat = update.message.location.latitude
+        lon = update.message.location.longitude
+        
+        # Определяем город по координатам
+        city = await get_city_by_coordinates(lat, lon)
+        if not city:
+            await update.message.reply_text("Не удалось определить город по местоположению")
+            return CITY
+    else:
+        city = update.message.text
+        if city == "Другой город":
+            await update.message.reply_text("Пожалуйста, введите название города:")
+            context.user_data['awaiting_custom_city'] = True
+            return CITY
 
     # Сохраняем выбранный город
     context.user_data['city'] = city
-    context.user_data['city_id'] = CITY_IDS.get(city.lower(), None)
-
+    city_id = CITY_IDS.get(city.lower())
+    if not city_id:
+        await update.message.reply_text("Не удалось определить ID города")
+        return CITY
+        
+    context.user_data['city_id'] = city_id
     await update.message.reply_text(f"Вы выбрали город: {city}")
     await show_position_selection(update, context)
     return POSITION

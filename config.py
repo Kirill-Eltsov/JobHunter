@@ -11,3 +11,5 @@ SEARCH_PARAMS = {
 HH_API_URL = "https://api.hh.ru/vacancies"
 
 OPEN_STREET_MAP_URL = "https://nominatim.openstreetmap.org/reverse"
+
+HH_API_CITY_ID = "https://api.hh.ru/suggests/areas"
