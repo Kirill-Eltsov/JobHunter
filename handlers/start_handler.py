@@ -1,8 +1,9 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler
 from utils.logger import log_warning, log_info, log_error
-from services.hh_service import fetch_vacancies, parse_vacancies, get_vacancies_stats
+from services.hh_service import fetch_vacancies, parse_vacancies, get_vacancies_stats, get_city_id_by_city_name
 from services.database import DatabaseHandler
+from services.osm_service import get_city_by_location
 
 # Определение состояний для ConversationHandler
 CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH = range(5)
@@ -35,7 +36,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Создаем клавиатуру с кнопками
     keyboard = [
         [KeyboardButton("Поиск вакансий")],
-        [KeyboardButton("Определить местоположение", request_location=True)],
         [KeyboardButton("Избранное")],
         [KeyboardButton("История поиска")],
     ]
@@ -120,7 +120,7 @@ async def city_selection_handler(update: Update, context: ContextTypes.DEFAULT_T
         lon = update.message.location.longitude
         
         # Определяем город по координатам
-        city = await get_city_by_coordinates(lat, lon)
+        city = await get_city_by_location(lat, lon)
         if not city:
             await update.message.reply_text("Не удалось определить город по местоположению")
             return CITY
@@ -133,9 +133,9 @@ async def city_selection_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     # Сохраняем выбранный город
     context.user_data['city'] = city
-    city_id = CITY_IDS.get(city.lower())
+    city_id = await get_city_id_by_city_name(city)
     if not city_id:
-        await update.message.reply_text("Не удалось определить ID города")
+        await update.message.reply_text("Не удалось определить ID города, попробуйте ввести название заново ")
         return CITY
         
     context.user_data['city_id'] = city_id
@@ -147,10 +147,13 @@ async def city_selection_handler(update: Update, context: ContextTypes.DEFAULT_T
 async def custom_city_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ввода пользовательского города."""
     city = update.message.text
-
+    city_id = await get_city_id_by_city_name(city)
+    if not city_id:
+        await update.message.reply_text("Ошибка в названии города, попробуйте ввести название заново ")
+        return CITY
     # Сохраняем введенный город
     context.user_data['city'] = city
-    context.user_data['city_id'] = CITY_IDS.get(city.lower(), None)
+    context.user_data['city_id'] = city_id
 
     await update.message.reply_text(f"Вы выбрали город: {city}")
     await show_position_selection(update, context)

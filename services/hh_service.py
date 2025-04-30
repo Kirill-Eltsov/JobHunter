@@ -1,9 +1,9 @@
 import aiohttp
 import asyncio
 import statistics
-from config import HH_API_URL, SEARCH_PARAMS
+from config import HH_API_URL, SEARCH_PARAMS, HH_API_CITY_ID
 from utils.logger import log_info, log_error
-from .database import DatabaseHandler
+# from .database import DatabaseHandler
 
 
 
@@ -158,6 +158,20 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
                 "salary_distribution": []
             }
 
+async def get_city_id_by_city_name(city_name):
+    params = {
+        "text": city_name,
+    }
+
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(HH_API_CITY_ID, params=params) as response:
+                response.raise_for_status()
+                data = await response.json()
+                city_id = data["items"][0]["id"]
+                return city_id
+        except Exception as e:
+            return ""
 
 
 
