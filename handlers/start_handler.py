@@ -68,12 +68,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Не удалось собрать аналитику")
             return ConversationHandler.END
             
-        message = (f"Аналитика по вакансиям:\n"
-                  f"Должность: {position}\n"
-                  f"Количество вакансий: {stats['vacancies_count']}\n"
-                  f"Средняя зарплата: {stats['avg_salary']} руб.\n"
-                  f"Минимальная зарплата: {stats['min_salary']} руб.\n"
-                  f"Максимальная зарплата: {stats['max_salary']} руб.")
+        exp_dist = stats['experience_distribution']
+        total_exp = sum(exp_dist.values()) if sum(exp_dist.values()) > 0 else 1
+        
+        message = (f"📊 Аналитика по вакансиям:\n"
+                  f"🔹 Должность: {position}\n"
+                  f"🔹 Количество вакансий: {stats['vacancies_count']}\n\n"
+                  f"💰 Зарплаты:\n"
+                  f"- Средняя: {stats['avg_salary']} руб.\n"
+                  f"- Медианная: {stats['median_salary']} руб.\n"  
+                  f"- 25-й перцентиль: {stats['percentile_25']} руб.\n"
+                  f"- 75-й перцентиль: {stats['percentile_75']} руб.\n"
+                  f"- Минимальная: {stats['min_salary']} руб.\n"
+                  f"- Максимальная: {stats['max_salary']} руб.\n\n"
+                  f"👔 Опыт работы:\n"
+                  f"- Без опыта: {exp_dist['no_experience']} ({round(exp_dist['no_experience']/total_exp*100)}%)\n"
+                  f"- 1-3 года: {exp_dist['1-3_years']} ({round(exp_dist['1-3_years']/total_exp*100)}%)\n"
+                  f"- 3-6 лет: {exp_dist['3-6_years']} ({round(exp_dist['3-6_years']/total_exp*100)}%)\n"
+                  f"- Более 6 лет: {exp_dist['more_than_6']} ({round(exp_dist['more_than_6']/total_exp*100)}%)")
                   
         await update.message.reply_text(message)
         return ConversationHandler.END

@@ -47,6 +47,7 @@ def parse_vacancies(data):
             "title": item.get("name"),
             "url": item.get("alternate_url"),
             "salary": item.get("salary"),
+            "experience": item.get("experience", {}).get("id"),
             "company": item.get("employer", {}).get("name"),
             "area": item.get("area", {}).get("name"),
             "published_at": item.get("published_at")
@@ -62,7 +63,7 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
         "text": keyword,
         "area": city,
         "per_page": min(count, 100),  # API HH ограничивает 100 вакансий на страницу
-        "only_with_salary": 1  # Получаем только вакансии с указанной зарплатой (error if set 'True')
+        "only_with_salary": 1  # Получаем только вакансии с указанной зарплатой
     }
 
     async with aiohttp.ClientSession() as session:
@@ -75,14 +76,31 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
                 if not vacancies:
                     return {
                         "avg_salary": 0,
+                        "median_salary": 0,
+                        "percentile_25": 0,
+                        "percentile_75": 0,
                         "min_salary": 0,
                         "max_salary": 0,
-                        "vacancies_count": 0
+                        "vacancies_count": 0,
+                        "experience_distribution": {
+                            "no_experience": 0,
+                            "1-3_years": 0,
+                            "3-6_years": 0,
+                            "more_than_6": 0
+                        }
                     }
 
-                # Собираем все зарплаты
+                # Собираем зарплаты и опыт
                 all_salaries = []
+                experience_counts = {
+                    "no_experience": 0,
+                    "1-3_years": 0,
+                    "3-6_years": 0,
+                    "more_than_6": 0
+                }
+
                 for vacancy in vacancies:
+                    # Обработка зарплат
                     salary = vacancy.get("salary")
                     if salary:
                         from_salary = salary.get("from")
@@ -94,19 +112,42 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
                         elif to_salary:
                             all_salaries.append(to_salary)
 
+                    # Обработка опыта
+                    exp = vacancy.get("experience")
+                    if exp == "noExperience":
+                        experience_counts["no_experience"] += 1
+                    elif exp == "between1And3":
+                        experience_counts["1-3_years"] += 1
+                    elif exp == "between3And6":
+                        experience_counts["3-6_years"] += 1
+                    elif exp == "moreThan6":
+                        experience_counts["more_than_6"] += 1
+
                 if not all_salaries:
                     return {
                         "avg_salary": 0,
+                        "median_salary": 0,
+                        "percentile_25": 0,
+                        "percentile_75": 0,
                         "min_salary": 0,
                         "max_salary": 0,
-                        "vacancies_count": 0
+                        "vacancies_count": len(vacancies),
+                        "experience_distribution": experience_counts
                     }
+
+                # Сортируем для расчета перцентилей
+                all_salaries_sorted = sorted(all_salaries)
+                n = len(all_salaries_sorted)
                 
                 return {
-                    "avg_salary": round(statistics.mean(all_salaries), 2),
-                    "min_salary": min(all_salaries),
-                    "max_salary": max(all_salaries),
-                    "vacancies_count": len(vacancies)
+                    "avg_salary": round(statistics.mean(all_salaries_sorted), 2),
+                    "median_salary": round(statistics.median(all_salaries_sorted), 2),
+                    "percentile_25": round(all_salaries_sorted[int(n * 0.25)], 2),
+                    "percentile_75": round(all_salaries_sorted[int(n * 0.75)], 2),
+                    "min_salary": min(all_salaries_sorted),
+                    "max_salary": max(all_salaries_sorted),
+                    "vacancies_count": len(vacancies),
+                    "experience_distribution": experience_counts
                 }
 
         except Exception as e:
