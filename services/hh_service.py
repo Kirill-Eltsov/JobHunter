@@ -4,7 +4,7 @@ import statistics
 from config.api_url import HH_API_URL, SEARCH_PARAMS, HH_API_CITY_ID
 from utils.logger import log_info, log_error
 from .database import DatabaseHandler
-
+from async_lru import alru_cache
 
 
 async def fetch_vacancies(keyword, area=None, salary_from=None, salary_to=None, per_page=5):
@@ -175,6 +175,7 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
                 "salary_distribution": []
             }
 
+@alru_cache(maxsize=32)
 async def get_city_id_by_city_name(city_name):
     params = {
         "text": city_name,
@@ -186,6 +187,7 @@ async def get_city_id_by_city_name(city_name):
                 response.raise_for_status()
                 data = await response.json()
                 city_id = data["items"][0]["id"]
+                log_info("Был успешно получен id города в базе hh")
                 return city_id
         except Exception as e:
             log_error("Ошибка при получении id города")
