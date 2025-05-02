@@ -34,7 +34,7 @@ async def fetch_vacancies(keyword, area=None, salary_from=None, salary_to=None, 
     return None
 
 
-def parse_vacancies(data, user_id=None):
+def parse_vacancies(data, user_id=1):
     """Парсинг данных вакансий из ответа API и сохранение в базу данных."""
     if not data or 'items' not in data:
         log_error("Нет данных для парсинга.")
