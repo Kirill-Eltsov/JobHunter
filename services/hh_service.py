@@ -188,7 +188,7 @@ async def get_city_id_by_city_name(city_name):
                 city_id = data["items"][0]["id"]
                 return city_id
         except Exception as e:
-            return ""
+            log_error("Ошибка при получении id города")
 
 
 
