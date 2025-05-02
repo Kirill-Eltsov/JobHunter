@@ -1,5 +1,5 @@
 import asyncio
-from config import OPEN_STREET_MAP_URL
+from config.api_url import OPEN_STREET_MAP_URL
 import aiohttp
 from utils.logger import log_error
 

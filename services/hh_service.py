@@ -1,9 +1,9 @@
 import aiohttp
 import asyncio
 import statistics
-from config import HH_API_URL, SEARCH_PARAMS, HH_API_CITY_ID
+from config.api_url import HH_API_URL, SEARCH_PARAMS, HH_API_CITY_ID
 from utils.logger import log_info, log_error
-# from .database import DatabaseHandler
+from .database import DatabaseHandler
 
 
 
@@ -34,13 +34,15 @@ async def fetch_vacancies(keyword, area=None, salary_from=None, salary_to=None, 
     return None
 
 
-def parse_vacancies(data):
-    """Парсинг данных вакансий из ответа API."""
+def parse_vacancies(data, user_id=None):
+    """Парсинг данных вакансий из ответа API и сохранение в базу данных."""
     if not data or 'items' not in data:
         log_error("Нет данных для парсинга.")
         return []
 
     vacancies = []
+    db_handler = DatabaseHandler()
+    
     for item in data['items']:
         vacancy = {
             "id": str(item.get("id")),
@@ -53,8 +55,23 @@ def parse_vacancies(data):
             "published_at": item.get("published_at")
         }
         vacancies.append(vacancy)
+        
+        # Сохраняем вакансию в базу данных, если указан user_id
+        if user_id:
+            db_handler.add_to_favorites(
+                user_id=user_id,
+                vacancy_data={
+                    'id': vacancy['id'],
+                    'title': vacancy['title'],
+                    'company': vacancy['company'],
+                    'salary': vacancy['salary'],
+                    'area': vacancy['area'],
+                    'url': vacancy['url']
+                }
+            )
 
     log_info(f"Парсинг завершен. Найдено {len(vacancies)} вакансий.")
+    db_handler.close()
     return vacancies
 
 async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
