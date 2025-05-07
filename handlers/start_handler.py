@@ -6,7 +6,7 @@ from services.database import DatabaseHandler
 from services.osm_service import get_city_by_location
 
 # Определение состояний для ConversationHandler
-CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH = range(5)
+CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH, HISTORY = range(6)
 
 # Предопределенные города
 CITIES = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"]
@@ -92,11 +92,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
         
     elif message_text == "Избранное":
-        await update.message.reply_text("Функция избранного пока не реализована.")
+        await show_favorites(update, context)
         return ConversationHandler.END
     elif message_text == "История поиска":
-        await update.message.reply_text("Функция истории поиска пока не реализована.")
-        return ConversationHandler.END
+        await show_search_history(update, context)
+        return HISTORY
     else:
         return ConversationHandler.END
 
@@ -264,7 +264,7 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     city_id = context.user_data.get('city_id', None)
     position = context.user_data.get('position', 'Не указана')
     salary_range = context.user_data.get('salary', 'Не указана')
-    number_of_vacancies = context.user_data.get('number_of_vacancies', 3)  # По умолчанию 3
+    number_of_vacancies = context.user_data.get('number_of_vacancies', 3)
 
     await update.message.reply_text(f"Ищем вакансии по следующим параметрам:\n"
                                     f"Город: {city}\n"
@@ -301,6 +301,17 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("По вашему запросу не найдено вакансий.")
         return
 
+    # Сохраняем запрос в историю
+    db_handler = DatabaseHandler()
+    db_handler.save_search_history(
+        user_id=update.effective_user.id,
+        position=position,
+        city=city,
+        salary_range=salary_range,
+        vacancies_count=len(vacancies)
+    )
+    db_handler.close()
+
     # Отправляем результаты пользователю
     await update.message.reply_text(f"Найдено {len(vacancies)} вакансий:")
 
@@ -324,7 +335,11 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"Зарплата: {salary_info}\n"
                         f"Ссылка: {vacancy['url']}\n")
 
-        await update.message.reply_text(vacancy_text)
+        context.user_data[f'vacancy_{vacancy["id"]}'] = vacancy
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton('Добавить в избранное', callback_data=f'add_fav:{vacancy["id"]}')]
+        ])
+        await update.message.reply_text(vacancy_text, reply_markup=keyboard)
 
     # Возвращаем клавиатуру с основными кнопками
     keyboard = [
@@ -336,3 +351,121 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text("Хотите выполнить новый поиск или воспользоваться другими функциями?",
                                     reply_markup=reply_markup)
+
+# --- Новый CallbackQueryHandler для избранного ---
+async def favorite_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = update.effective_user.id
+    db_handler = DatabaseHandler()
+    data = query.data.split(':')
+    action = data[0]
+    vacancy_id = data[1]
+    db_id = int(data[2]) if len(data) > 2 else None
+
+    if action == 'add_fav':
+        # vacancy_data должен быть сохранён в context.user_data при показе вакансий
+        vacancy_data = context.user_data.get(f'vacancy_{vacancy_id}')
+        if vacancy_data:
+            db_handler.add_to_favorites(user_id, vacancy_data)
+            await query.edit_message_reply_markup(reply_markup=None)
+            await query.message.reply_text('Вакансия добавлена в избранное!')
+    elif action == 'remove_fav' and db_id:
+        db_handler.remove_from_favorites(user_id, db_id)
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.message.reply_text('Вакансия удалена из избранного!')
+    db_handler.close()
+
+# --- Изменяем обработку кнопки "Избранное" ---
+async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    db_handler = DatabaseHandler()
+    favorites = db_handler.get_favorites(user_id)
+    db_handler.close()
+    if not favorites:
+        await update.message.reply_text('У вас нет избранных вакансий.')
+        return
+    for fav in favorites:
+        salary = fav['salary']
+        salary_info = 'Не указана'
+        if salary['from'] and salary['to']:
+            salary_info = f"{salary['from']} - {salary['to']} {salary['currency']}"
+        elif salary['from']:
+            salary_info = f"от {salary['from']} {salary['currency']}"
+        elif salary['to']:
+            salary_info = f"до {salary['to']} {salary['currency']}"
+        text = (f"{fav['title']}\nКомпания: {fav['company']}\nГород: {fav['city']}\nЗарплата: {salary_info}\nСсылка: {fav['url']}")
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton('Удалить из избранного', callback_data=f'remove_fav:{fav["id"]}:{fav["db_id"]}')]
+        ])
+        await update.message.reply_text(text, reply_markup=keyboard)
+
+async def show_search_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать историю поиска с пагинацией."""
+    user_id = update.effective_user.id
+    page = context.user_data.get('history_page', 1)
+    
+    db_handler = DatabaseHandler()
+    history, total_count = db_handler.get_search_history(user_id, page=page)
+    db_handler.close()
+
+    if not history:
+        await update.message.reply_text("У вас пока нет истории поиска.")
+        return
+
+    # Формируем сообщение с историей
+    message = "📜 История поиска:\n\n"
+    for i, item in enumerate(history, 1):
+        message += (f"{i}. Должность: {item['position']}\n"
+                   f"   Город: {item['city']}\n"
+                   f"   Зарплата: {item['salary_range']}\n"
+                   f"   Найдено вакансий: {item['vacancies_count']}\n"
+                   f"   Дата: {item['created_at'].strftime('%d.%m.%Y %H:%M')}\n\n")
+
+    # Добавляем информацию о страницах
+    total_pages = (total_count + 4) // 5  # Округление вверх
+    message += f"\nСтраница {page} из {total_pages}"
+
+    # Создаем клавиатуру для навигации
+    keyboard = []
+    nav_buttons = []
+    
+    if page > 1:
+        nav_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"history:prev:{page}"))
+    if page < total_pages:
+        nav_buttons.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"history:next:{page}"))
+    
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    
+    # Если это первый показ истории (не навигация), отправляем новое сообщение
+    if not update.callback_query:
+        await update.message.reply_text(message, reply_markup=reply_markup)
+    else:
+        # Если это навигация, обновляем существующее сообщение
+        await update.callback_query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup
+        )
+
+async def history_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий на кнопки навигации в истории поиска."""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split(':')
+    action = data[1]
+    current_page = int(data[2])
+    
+    if action == 'prev':
+        new_page = current_page - 1
+    elif action == 'next':
+        new_page = current_page + 1
+    else:
+        return
+    
+    context.user_data['history_page'] = new_page
+    # Передаем query в show_search_history для обновления существующего сообщения
+    await show_search_history(update, context)

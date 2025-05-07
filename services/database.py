@@ -37,6 +37,18 @@ class DatabaseHandler:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            self.db.execute_query("""
+                CREATE TABLE IF NOT EXISTS search_history (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    position TEXT NOT NULL,
+                    city TEXT NOT NULL,
+                    salary_range TEXT,
+                    vacancies_count INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
         except Exception as e:
             print(f"Error initializing database: {e}")
             raise
@@ -143,6 +155,51 @@ class DatabaseHandler:
         except Exception as e:
             print(f"Error getting analytics: {e}")
             return None
+
+    def save_search_history(self, user_id: int, position: str, city: str, salary_range: str, vacancies_count: int) -> bool:
+        """Save search query to history"""
+        try:
+            return self.db.execute_query("""
+                INSERT INTO search_history (
+                    user_id, position, city, salary_range, vacancies_count
+                ) VALUES (%s, %s, %s, %s, %s)
+            """, (user_id, position, city, salary_range, vacancies_count))
+        except Exception as e:
+            print(f"Error saving search history: {e}")
+            return False
+
+    def get_search_history(self, user_id: int, page: int = 1, per_page: int = 5) -> tuple:
+        """Get user's search history with pagination"""
+        try:
+            # Получаем общее количество запросов
+            count_result = self.db.execute_query("""
+                SELECT COUNT(*) FROM search_history WHERE user_id = %s
+            """, (user_id,), fetch=True)
+            total_count = count_result[0][0] if count_result else 0
+
+            # Получаем записи для текущей страницы
+            offset = (page - 1) * per_page
+            rows = self.db.execute_query("""
+                SELECT id, position, city, salary_range, vacancies_count, created_at
+                FROM search_history
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+            """, (user_id, per_page, offset), fetch=True)
+            
+            history = [{
+                'id': row[0],
+                'position': row[1],
+                'city': row[2],
+                'salary_range': row[3],
+                'vacancies_count': row[4],
+                'created_at': row[5]
+            } for row in rows]
+
+            return history, total_count
+        except Exception as e:
+            print(f"Error getting search history: {e}")
+            return [], 0
 
     def close(self):
         """Close all database connections"""
