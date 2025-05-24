@@ -10,6 +10,17 @@ class DatabaseHandler:
         """Initialize database tables if they don't exist"""
         try:
             self.db.execute_query("""
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    position TEXT NOT NULL,
+                    city TEXT NOT NULL,
+                    salary_range TEXT,
+                    last_checked BIGINT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, position, city, salary_range)
+                );
+
                 CREATE TABLE IF NOT EXISTS favorites (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
@@ -200,6 +211,62 @@ class DatabaseHandler:
         except Exception as e:
             print(f"Error getting search history: {e}")
             return [], 0
+
+    def add_subscription(self, user_id: int, position: str, city: str, salary_range: str) -> bool:
+        """Add a new subscription for job alerts"""
+        try:
+            return self.db.execute_query("""
+                INSERT INTO subscriptions 
+                (user_id, position, city, salary_range, last_checked)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, position, city, salary_range) DO UPDATE
+                SET last_checked = EXCLUDED.last_checked
+            """, (user_id, position, city, salary_range, int(time.time())))
+        except Exception as e:
+            print(f"Error adding subscription: {e}")
+            return False
+
+    def remove_subscription(self, user_id: int, subscription_id: int) -> bool:
+        """Remove a subscription"""
+        try:
+            return self.db.execute_query("""
+                DELETE FROM subscriptions
+                WHERE user_id = %s AND id = %s
+            """, (user_id, subscription_id))
+        except Exception as e:
+            print(f"Error removing subscription: {e}")
+            return False
+
+    def get_user_subscriptions(self, user_id: int) -> List[Dict]:
+        """Get all subscriptions for a user"""
+        try:
+            rows = self.db.execute_query("""
+                SELECT id, position, city, salary_range, last_checked
+                FROM subscriptions
+                WHERE user_id = %s
+            """, (user_id,), fetch=True)
+            return [{
+                'id': row[0],
+                'position': row[1],
+                'city': row[2],
+                'salary_range': row[3],
+                'last_checked': row[4]
+            } for row in rows]
+        except Exception as e:
+            print(f"Error getting subscriptions: {e}")
+            return []
+
+    def update_last_checked(self, subscription_id: int) -> bool:
+        """Update last checked timestamp for subscription"""
+        try:
+            return self.db.execute_query("""
+                UPDATE subscriptions
+                SET last_checked = %s
+                WHERE id = %s
+            """, (int(time.time()), subscription_id))
+        except Exception as e:
+            print(f"Error updating last checked: {e}")
+            return False
 
     def close(self):
         """Close all database connections"""
