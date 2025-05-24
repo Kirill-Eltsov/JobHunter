@@ -1,3 +1,4 @@
+import re
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler
 from utils.logger import log_warning, log_info, log_error
@@ -184,12 +185,21 @@ async def show_position_selection(update: Update, context: ContextTypes.DEFAULT_
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
     await update.message.reply_text(
-        "Выберите должность для поиска вакансий или напишите:",
+        "Выберите должность для поиска вакансий",
         reply_markup=reply_markup
     )
     # Сохраняем текущую страницу
     context.user_data['current_page'] = page
 
+def validate_position_symbols(position: str) -> bool:
+    """Validate job title contains only allowed characters."""
+    pattern = r'^[a-zA-Zа-яА-ЯёЁ\s-]+$'
+    return bool(re.fullmatch(pattern, position))
+
+def validate_position_length(position: str) -> bool:
+    """Validate job title length"""
+    length = len(position)
+    return 2 <= length <= 30
 
 async def handle_position_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора должности с учетом пагинации."""
@@ -212,6 +222,31 @@ async def handle_position_selection(update: Update, context: ContextTypes.DEFAUL
         context.user_data['awaiting_custom_position'] = True
         return
     
+    # Handle custom position input with validation
+    if context.user_data.get('awaiting_custom_position', False):
+        if not validate_position_symbols(text):
+            await update.message.reply_text(
+                "Некорректное название должности. Используйте только буквы, пробелы и дефисы.\n"
+                "Пожалуйста, введите должность снова:"
+            )
+            return
+        
+        if not validate_position_length(text):
+            await update.message.reply_text(
+                "Название должности слишком короткое (длинное). Введите не менее 2 и не более 30 символов\n"
+                "Пожалуйста, введите должность снова:"
+            )
+            return
+        
+        context.user_data['awaiting_custom_position'] = False
+        context.user_data['position'] = text
+        await update.message.reply_text(
+            f"Вы выбрали должность: {text}",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        await show_salary_selection(update, context)
+        return SALARY
+    
     # Сохраняем выбранную должность
     context.user_data['position'] = text
     await update.message.reply_text(
@@ -220,29 +255,6 @@ async def handle_position_selection(update: Update, context: ContextTypes.DEFAUL
     )
     await show_salary_selection(update, context)
     return SALARY
-
-
-# async def handle_position_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     """Обработчик ввода пользовательской должности."""
-#     position = update.message.text
-
-#     # Проверяем, ожидаем ли мы ввод города
-#     if context.user_data.get('awaiting_custom_city', False):
-#         context.user_data['awaiting_custom_city'] = False
-#         return await custom_city_handler(update, context)
-
-#     # Проверяем, ожидаем ли мы ввод должности
-#     if context.user_data.get('awaiting_custom_position', False):
-#         context.user_data['awaiting_custom_position'] = False
-#         # Сохраняем введенную должность
-#         context.user_data['position'] = position
-
-#         await update.message.reply_text(f"Вы выбрали должность: {position}")
-#         await show_salary_selection(update, context)
-#         return SALARY
-
-#     # Если мы не ожидаем ни город, ни должность, проверяем, может это кнопка из главного меню
-#     return await button_handler(update, context)
 
 
 async def show_salary_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
