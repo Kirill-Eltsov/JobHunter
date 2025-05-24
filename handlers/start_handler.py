@@ -9,7 +9,7 @@ from services.osm_service import get_city_by_location
 CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH, HISTORY = range(6)
 
 # Предопределенные города
-CITIES = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"]
+CITIES = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань", "Другой город"]
 # Предопределенные должности
 POSITIONS = ["Разработчик", "Дизайнер", "Менеджер", "Аналитик", "Тестировщик"]
 # Предопределенные диапазоны зарплат
@@ -104,12 +104,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_city_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать пользователю выбор города для поиска вакансий."""
     # Создаем клавиатуру с кнопками городов и определением местоположения
-    keyboard = [[KeyboardButton(city)] for city in CITIES]
-    keyboard.append([KeyboardButton("Другой город")])
+    keyboard = [[KeyboardButton(CITIES[i]),KeyboardButton(CITIES[i+1]) ] for i in range(0, len(CITIES), 2)]
     keyboard.append([KeyboardButton("Определить местоположение", request_location=True)])
 
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("Выберите город для поиска вакансий:", reply_markup=reply_markup)
+    await update.message.reply_text("Выберите город для поиска вакансий или напишите его вручную", reply_markup=reply_markup)
 
 
 async def city_selection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -118,7 +117,6 @@ async def city_selection_handler(update: Update, context: ContextTypes.DEFAULT_T
         # Получаем координаты
         lat = update.message.location.latitude
         lon = update.message.location.longitude
-        
         # Определяем город по координатам
         city = await get_city_by_location(lat, lon)
         if not city:

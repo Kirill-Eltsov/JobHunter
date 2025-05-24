@@ -26,7 +26,7 @@ def main():
         entry_points=[MessageHandler(filters.Regex('^Поиск вакансий$'), button_handler)],
         states={
             CITY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, city_selection_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND | filters.LOCATION, city_selection_handler),
             ],
             POSITION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_position_selection),
