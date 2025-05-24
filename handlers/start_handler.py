@@ -10,8 +10,10 @@ CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH, HISTORY = range(6)
 
 # Предопределенные города
 CITIES = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань", "Другой город"]
+POSITIONS_PER_PAGE = 4
 # Предопределенные должности
-POSITIONS = ["Разработчик", "Дизайнер", "Менеджер", "Аналитик", "Тестировщик"]
+POSITIONS = ["Разработчик", "Дизайнер", "Менеджер",
+ "Аналитик", "Тестировщик", "DevOps-инженер", "Андроид-разработчик", "Ios-разработчик", "C++ developer", "C# dev"]
 # Предопределенные диапазоны зарплат
 SALARY_RANGES = ["Не важно", "0-30,000", "30,000-60,000", "60,000-100,000", "Более 100,000"]
 
@@ -158,54 +160,89 @@ async def custom_city_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     return POSITION
 
 
-async def show_position_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать пользователю выбор должности для поиска вакансий."""
+async def show_position_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
+    """Показать пользователю выбор должности с пагинацией."""
+    # Вычисляем диапазон должностей для текущей страницы
+    start_idx = page * POSITIONS_PER_PAGE
+    end_idx = start_idx + POSITIONS_PER_PAGE
+    current_positions = POSITIONS[start_idx:end_idx]
+    
     # Создаем клавиатуру с кнопками должностей
-    keyboard = [[KeyboardButton(position)] for position in POSITIONS]
+    keyboard = [[KeyboardButton(current_positions[i]), KeyboardButton(current_positions[i+1])] for i in range(0, len(current_positions), 2)]
+    
+    # Добавляем кнопки навигации
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(KeyboardButton("← Назад"))
+    if end_idx < len(POSITIONS):
+        nav_buttons.append(KeyboardButton("Еще →"))
+    
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+    
     keyboard.append([KeyboardButton("Другая должность")])
-
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("Выберите должность для поиска вакансий:", reply_markup=reply_markup)
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+    await update.message.reply_text(
+        "Выберите должность для поиска вакансий или напишите:",
+        reply_markup=reply_markup
+    )
+    # Сохраняем текущую страницу
+    context.user_data['current_page'] = page
 
 
 async def handle_position_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик выбора должности."""
-    position = update.message.text
-
-    if position == "Другая должность":
-        await update.message.reply_text("Пожалуйста, введите желаемую должность:")
+    """Обработчик выбора должности с учетом пагинации."""
+    text = update.message.text
+    current_page = context.user_data.get('current_page', 0)
+    
+    if text == "← Назад":
+        await show_position_selection(update, context, page=current_page - 1)
+        return
+    
+    if text == "Еще →":
+        await show_position_selection(update, context, page=current_page + 1)
+        return
+    
+    if text == "Другая должность":
+        await update.message.reply_text(
+            "Пожалуйста, введите желаемую должность:",
+            reply_markup=ReplyKeyboardRemove()
+        )
         context.user_data['awaiting_custom_position'] = True
-        return POSITION
-
+        return
+    
     # Сохраняем выбранную должность
-    context.user_data['position'] = position
-
-    await update.message.reply_text(f"Вы выбрали должность: {position}")
+    context.user_data['position'] = text
+    await update.message.reply_text(
+        f"Вы выбрали должность: {text}",
+        reply_markup=ReplyKeyboardRemove()
+    )
     await show_salary_selection(update, context)
     return SALARY
 
 
-async def handle_position_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ввода пользовательской должности."""
-    position = update.message.text
+# async def handle_position_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Обработчик ввода пользовательской должности."""
+#     position = update.message.text
 
-    # Проверяем, ожидаем ли мы ввод города
-    if context.user_data.get('awaiting_custom_city', False):
-        context.user_data['awaiting_custom_city'] = False
-        return await custom_city_handler(update, context)
+#     # Проверяем, ожидаем ли мы ввод города
+#     if context.user_data.get('awaiting_custom_city', False):
+#         context.user_data['awaiting_custom_city'] = False
+#         return await custom_city_handler(update, context)
 
-    # Проверяем, ожидаем ли мы ввод должности
-    if context.user_data.get('awaiting_custom_position', False):
-        context.user_data['awaiting_custom_position'] = False
-        # Сохраняем введенную должность
-        context.user_data['position'] = position
+#     # Проверяем, ожидаем ли мы ввод должности
+#     if context.user_data.get('awaiting_custom_position', False):
+#         context.user_data['awaiting_custom_position'] = False
+#         # Сохраняем введенную должность
+#         context.user_data['position'] = position
 
-        await update.message.reply_text(f"Вы выбрали должность: {position}")
-        await show_salary_selection(update, context)
-        return SALARY
+#         await update.message.reply_text(f"Вы выбрали должность: {position}")
+#         await show_salary_selection(update, context)
+#         return SALARY
 
-    # Если мы не ожидаем ни город, ни должность, проверяем, может это кнопка из главного меню
-    return await button_handler(update, context)
+#     # Если мы не ожидаем ни город, ни должность, проверяем, может это кнопка из главного меню
+#     return await button_handler(update, context)
 
 
 async def show_salary_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):

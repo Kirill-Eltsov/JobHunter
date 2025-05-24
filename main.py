@@ -2,7 +2,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackQueryHandler
 from handlers.start_handler import (
     start, button_handler, city_selection_handler, handle_position_selection,
-    handle_position_input, salary_selection_handler, show_city_selection, number_of_vacancies_handler,
+    salary_selection_handler, show_city_selection, number_of_vacancies_handler,
     CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, HISTORY,
     favorite_callback_handler, history_callback_handler
 )
