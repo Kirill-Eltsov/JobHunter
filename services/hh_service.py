@@ -5,7 +5,8 @@ from config.api_url import HH_API_URL, SEARCH_PARAMS, HH_API_CITY_ID
 from utils.logger import log_info, log_error
 from .database import DatabaseHandler
 from async_lru import alru_cache
-
+from pprint import pprint
+import re
 
 async def fetch_vacancies(keyword, area=None, salary_from=None, salary_to=None, per_page=5):
     """Асинхронное получение вакансий с hh.ru по заданным параметрам."""
@@ -52,7 +53,8 @@ def parse_vacancies(data, user_id=1):
             "experience": item.get("experience", {}).get("id"),
             "company": item.get("employer", {}).get("name"),
             "area": item.get("area", {}).get("name"),
-            "published_at": item.get("published_at")
+            "published_at": item.get("published_at"),
+            "requirements": item.get("snippet").get("requirement")
         }
         vacancies.append(vacancy)
         
@@ -115,7 +117,7 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
                     "3-6_years": 0,
                     "more_than_6": 0
                 }
-
+                all_skills = {}
                 for vacancy in vacancies:
                     # Обработка зарплат
                     salary = vacancy.get("salary")
@@ -128,7 +130,15 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
                             all_salaries.append(from_salary)
                         elif to_salary:
                             all_salaries.append(to_salary)
-
+                    # skills
+                    skills_row = vacancy.get("requirements")
+                    pattern = r"\b[A-Za-z][A-Za-z0-9+#\. ]*(?:\s+[A-Za-z][A-Za-z0-9+#]*)*\b"
+                    if skills_row:
+                        skills = re.findall(pattern, skills_row)
+                        for skill in skills:
+                            if len(skill) >= 2 and not skill.isdigit():
+                                skill = skill.strip(' .,').capitalize()
+                                all_skills[skill] = all_skills.get(skill, 0) + 1
                     # Обработка опыта
                     exp = vacancy.get("experience")
                     if exp == "noExperience":
@@ -152,6 +162,8 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
                         "experience_distribution": experience_counts
                     }
 
+                filtered_skills = {skill: count for skill, count in all_skills.items() if count > 1 and skill != "Highlighttext"}
+                skills_counter = sorted(filtered_skills.items(), key=lambda item: item[1], reverse=True)
                 # Сортируем для расчета перцентилей
                 all_salaries_sorted = sorted(all_salaries)
                 n = len(all_salaries_sorted)
@@ -164,7 +176,8 @@ async def get_vacancies_stats(keyword: str, city: str, count: int = 50) -> dict:
                     "min_salary": min(all_salaries_sorted),
                     "max_salary": max(all_salaries_sorted),
                     "vacancies_count": len(vacancies),
-                    "experience_distribution": experience_counts
+                    "experience_distribution": experience_counts,
+                    "skills_counter": skills_counter
                 }
 
         except Exception as e:
@@ -192,7 +205,17 @@ async def get_city_id_by_city_name(city_name):
         except Exception as e:
             log_error("Ошибка при получении id города")
 
-
+async def get_skills(vacancy_id: int):
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(f'{HH_API_URL}/{vacancy_id}') as response:
+                response.raise_for_status()
+                data = await response.json()
+                return data.get("key_skills")
+                # pprint(data)
+        except Exception as e:
+            log_error(f"ошибка получения навыков: {e}")
+            return ""
 
 # Пример использования
 async def main():

@@ -5,6 +5,7 @@ from utils.logger import log_warning, log_info, log_error
 from services.hh_service import fetch_vacancies, parse_vacancies, get_vacancies_stats, get_city_id_by_city_name
 from services.database import DatabaseHandler
 from services.osm_service import get_city_by_location
+from pprint import pprint
 
 # Определение состояний для ConversationHandler
 CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH, HISTORY = range(6)
@@ -73,6 +74,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ConversationHandler.END
             
         exp_dist = stats['experience_distribution']
+        skills = stats['skills_counter']
+        skills_top5 = skills[:5]
+        skils_last3 = skills[-4:-1]
         total_exp = sum(exp_dist.values()) if sum(exp_dist.values()) > 0 else 1
         
         message = (f"📊 Аналитика по вакансиям:\n"
@@ -89,7 +93,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                   f"- Без опыта: {exp_dist['no_experience']} ({round(exp_dist['no_experience']/total_exp*100)}%)\n"
                   f"- 1-3 года: {exp_dist['1-3_years']} ({round(exp_dist['1-3_years']/total_exp*100)}%)\n"
                   f"- 3-6 лет: {exp_dist['3-6_years']} ({round(exp_dist['3-6_years']/total_exp*100)}%)\n"
-                  f"- Более 6 лет: {exp_dist['more_than_6']} ({round(exp_dist['more_than_6']/total_exp*100)}%)")
+                  f"- Более 6 лет: {exp_dist['more_than_6']} ({round(exp_dist['more_than_6']/total_exp*100)}%)\n\n"
+                  f"📊 Статистика навыков (на основе 50 вакансий):\n"
+                  f"🔥 Топ-3 самых частых:\n"
+                  f"- {skills_top5[0][0]} - {skills_top5[0][1]} упоминаний ({round(skills_top5[0][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skills_top5[1][0]} - {skills_top5[1][1]} упоминаний ({round(skills_top5[1][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skills_top5[2][0]} - {skills_top5[2][1]} упоминаний ({round(skills_top5[2][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skills_top5[3][0]} - {skills_top5[3][1]} упоминаний ({round(skills_top5[3][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skills_top5[4][0]} - {skills_top5[4][1]} упоминаний ({round(skills_top5[4][1] / 50 * 100)}% вакансий)\n"
+                  f"🛠 Редкие, но полезные:\n"
+                  f"- {skils_last3[-1][0]} - {skils_last3[-1][1]} ({round(skils_last3[0][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skils_last3[-2][0]} - {skils_last3[-2][1]} ({round(skils_last3[0][1] / 50 * 100)}% вакансий)\n"
+                  f"💡 Рекомендации:\n"
+                  f"* {skills_top5[0][0]}, {skills_top5[1][0]} и {skills_top5[2][0]} - ключевые навыки для {position}."
+        )
                   
         await update.message.reply_text(message)
         return ConversationHandler.END
@@ -336,7 +353,6 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Получаем вакансии через API HH.ru
     vacancies_data = await fetch_vacancies(position, city_id, salary_from, salary_to, per_page=number_of_vacancies)
-
     if not vacancies_data:
         await update.message.reply_text("К сожалению, не удалось получить вакансии. Попробуйте позже.")
         return
