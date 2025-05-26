@@ -54,7 +54,7 @@ def parse_vacancies(data, user_id=1):
             "company": item.get("employer", {}).get("name"),
             "area": item.get("area", {}).get("name"),
             "published_at": item.get("published_at"),
-            "requirements": item.get("snippet").get("requirement")
+            "requirements": item.get("snippet", {}).get("requirement", "")
         }
         vacancies.append(vacancy)
         
@@ -204,6 +204,22 @@ async def get_city_id_by_city_name(city_name):
                 return city_id
         except Exception as e:
             log_error("Ошибка при получении id города")
+
+async def fetch_related_vacancies(vacancy_id: str) -> dict:
+    """Запрос похожих вакансий через API HH."""
+    params = {
+        "per_page": 3,  # API HH ограничивает 100 вакансий на страницу
+        "only_with_salary": 1  # Получаем только вакансии с указанной зарплатой
+    }
+    url = f"{HH_API_URL}/{vacancy_id}/related_vacancies"
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url, params=params) as response:
+                response.raise_for_status()
+                return await response.json()
+        except Exception as e:
+            log_error(f"API HH error: {e}")
+            return None
 
 async def get_skills(vacancy_id: int):
     async with aiohttp.ClientSession() as session:

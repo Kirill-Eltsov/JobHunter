@@ -50,8 +50,8 @@ def main():
     # Обработчик для других кнопок главного меню
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
 
-    # Добавляем CallbackQueryHandler для избранного
-    application.add_handler(CallbackQueryHandler(favorite_callback_handler, pattern=r'^(add_fav|remove_fav):'))
+    # Добавляем CallbackQueryHandler для избранного и похожих вакансий
+    application.add_handler(CallbackQueryHandler(favorite_callback_handler, pattern=r'^(add_fav|remove_fav|related):'))
 
     # Добавляем CallbackQueryHandler для истории поиска
     application.add_handler(CallbackQueryHandler(history_callback_handler, pattern=r'^history:'))
