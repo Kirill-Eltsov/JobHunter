@@ -1,5 +1,6 @@
 from typing import List, Dict, Optional
 from config.database import Database
+from datetime import datetime
 
 class DatabaseHandler:
     def __init__(self):
@@ -47,6 +48,20 @@ class DatabaseHandler:
                     salary_range TEXT,
                     vacancies_count INTEGER NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            self.db.execute_query("""
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    position TEXT NOT NULL,  -- вместо search_query
+                    salary_min INTEGER,
+                    salary_max INTEGER,  -- переименовано для ясности
+                    location TEXT,  -- более гибко чем city (может быть регион/страна)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_vacancy_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, position, location)  -- предотвращает дубли
                 )
             """)
         except Exception as e:
@@ -200,6 +215,120 @@ class DatabaseHandler:
         except Exception as e:
             print(f"Error getting search history: {e}")
             return [], 0
+        
+    def add_subscription(self, user_id: int, position: str, 
+                   salary_min: int = None, salary_max: int = None,
+                   location: str = None) -> bool:
+        """Add new subscription with clear parameters"""
+        try:
+            self.db.execute_query("""
+                INSERT INTO subscriptions 
+                (user_id, position, salary_min, salary_max, location)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user_id, position, salary_min, salary_max, location))
+            return True
+        except Exception as e:
+            print(f"Subscription exists or error: {e}")
+            return False
+
+    def get_active_subscriptions(self, user_id: int) -> List[Dict[str, Optional[str | int | datetime]]]:
+        """Get all active subscriptions for specified user.
+        
+        Args:
+            user_id: Telegram user ID to fetch subscriptions for
+            
+        Returns:
+            List of dictionaries with subscription details:
+            [
+                {
+                    'id': int,
+                    'position': str,
+                    'salary_min': Optional[int],
+                    'salary_max': Optional[int], 
+                    'location': Optional[str],
+                    'created_at': datetime
+                },
+                ...
+            ]
+            Empty list if no subscriptions found or error occurred
+        """
+        try:
+            rows = self.db.execute_query(
+                """
+                SELECT 
+                    id,
+                    position,
+                    salary_min, 
+                    salary_max,
+                    location,
+                    created_at
+                FROM subscriptions
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                """,
+                (user_id,),
+                fetch=True
+            )
+            
+            if not rows:
+                return []
+                
+            return [{
+                'id': row[0],
+                'position': row[1],
+                'salary_min': row[2],
+                'salary_max': row[3],
+                'location': row[4],
+                'created_at': row[5]
+            } for row in rows]
+            
+        except Exception as e:
+            print(f"Error fetching subscriptions for user {user_id}: {str(e)}")
+            return []
+
+        def remove_subscription(self, subscription_id: int) -> bool:
+            """Remove specific subscription by its ID.
+            
+            Args:
+                subscription_id: ID of subscription to remove
+                
+            Returns:
+                bool: True if subscription was deleted, False if error occurred
+            """
+        try:
+            self.db.execute_query(
+                """
+                DELETE FROM subscriptions
+                WHERE id = %s
+                """,
+                (subscription_id,)
+            )
+            return True
+        except Exception as e:
+            print(f"Error removing subscription {subscription_id}: {e}")
+            return False
+
+    def clear_all_subscriptions(self, user_id: int) -> bool:
+        """Remove all subscriptions for specified user.
+        
+        Args:
+            user_id: Telegram user ID to clear subscriptions for
+            
+        Returns:
+            bool: True if all subscriptions were deleted, False if error occurred
+        """
+        try:
+            self.db.execute_query(
+                """
+                DELETE FROM subscriptions
+                WHERE user_id = %s
+                """,
+                (user_id,)
+            )
+            return True
+        except Exception as e:
+            print(f"Error clearing subscriptions for user {user_id}: {e}")
+            return False
 
     def close(self):
         """Close all database connections"""

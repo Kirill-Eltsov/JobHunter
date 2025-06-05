@@ -4,6 +4,8 @@ from utils.logger import log_warning, log_info, log_error
 from services.hh_service import fetch_vacancies, parse_vacancies, get_vacancies_stats, get_city_id_by_city_name
 from services.database import DatabaseHandler
 from services.osm_service import get_city_by_location
+from handlers.subscription_handlers import add_subscription_handler, list_subscriptions_handler, remove_subscription_handler, clear_subscriptions_handler
+from utils.parse_salary import parse_salary
 
 # Определение состояний для ConversationHandler
 CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH, HISTORY = range(6)
@@ -38,6 +40,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [KeyboardButton("Поиск вакансий")],
         [KeyboardButton("Избранное")],
         [KeyboardButton("История поиска")],
+        [KeyboardButton("Подписки")],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -97,6 +100,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif message_text == "История поиска":
         await show_search_history(update, context)
         return HISTORY
+    elif message_text == "Подписки":
+        await list_subscriptions_handler(DatabaseHandler(), update, context)
+        return ConversationHandler.END
+    elif message_text == "Подписаться на обновления":
+        if not context.user_data.get('position'):
+            await update.message.reply_text("Сначала выполните поиск вакансий")
+            return ConversationHandler.END
+        await add_subscription_handler(DatabaseHandler(), update, context)
+        return ConversationHandler.END
+
     else:
         return ConversationHandler.END
 
@@ -272,20 +285,7 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     f"Зарплата: {salary_range}\n\n"
                                     f"Пожалуйста, подождите...")
 
-    # Парсим диапазон зарплаты
-    salary_from = None
-    salary_to = None
-
-    if salary_range != "Не важно" and salary_range != "Не указана":
-        try:
-            if salary_range == "Более 100,000":
-                salary_from = 100000
-            elif "-" in salary_range:
-                parts = salary_range.replace(",", "").split("-")
-                salary_from = int(parts[0])
-                salary_to = int(parts[1])
-        except (ValueError, IndexError):
-            log_error(f"Ошибка при парсинге диапазона зарплаты: {salary_range}")
+    salary_from, salary_to = parse_salary(salary_range)
 
     # Получаем вакансии через API HH.ru
     vacancies_data = await fetch_vacancies(position, city_id, salary_from, salary_to, per_page=number_of_vacancies)
@@ -345,8 +345,11 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [KeyboardButton("Поиск вакансий")],
         [KeyboardButton("Избранное")],
-        [KeyboardButton("Аналитика")],
         [KeyboardButton("История поиска")],
+        [
+            KeyboardButton("Аналитика"), 
+            KeyboardButton("Подписаться на обновления")
+        ]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text("Хотите выполнить новый поиск или воспользоваться другими функциями?",

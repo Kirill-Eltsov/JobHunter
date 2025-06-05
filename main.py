@@ -6,6 +6,7 @@ from handlers.start_handler import (
     CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, HISTORY,
     favorite_callback_handler, history_callback_handler
 )
+from handlers.subscription_handlers import add_subscription_handler, list_subscriptions_handler, remove_subscription_handler, clear_subscriptions_handler
 from utils.logger import log_warning
 import os
 from dotenv import load_dotenv
@@ -55,6 +56,8 @@ def main():
 
     # Добавляем CallbackQueryHandler для истории поиска
     application.add_handler(CallbackQueryHandler(history_callback_handler, pattern=r'^history:'))
+
+    application.add_handler(CallbackQueryHandler(add_subscription_handler, pattern=r'^subscribe_updates$'))
 
     application.run_polling()
 
