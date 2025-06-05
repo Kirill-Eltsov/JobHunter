@@ -26,3 +26,6 @@
 
 ```python main.py```
 
+7. Файл с инструкцией по настройке postgresql
+
+```postgreql_setup.md```

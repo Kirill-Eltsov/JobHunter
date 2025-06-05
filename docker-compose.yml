@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .  # Собирает образ из Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy  # Ждём, пока БД станет доступна
+    volumes:
+      - .:/app  # (автоперезагрузка кода)
+    # restart: unless-stopped  # Опционально: автовосстановление при падении
+
+  db:
+    env_file: .env  # Используем те же переменные
+    image: postgres:15  # Официальный образ PostgreSQL
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB={POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Сохранение данных между перезапусками
+    ports:
+      - "${POSTGRES_PORT}:5432"  # Доступ к БД с хоста (для отладки)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:  # Постоянное хранилище для БД

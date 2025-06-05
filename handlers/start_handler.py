@@ -1,9 +1,11 @@
+import re
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler
 from utils.logger import log_warning, log_info, log_error
-from services.hh_service import fetch_vacancies, parse_vacancies, get_vacancies_stats, get_city_id_by_city_name
+from services.hh_service import fetch_vacancies, parse_vacancies, get_vacancies_stats, get_city_id_by_city_name, fetch_related_vacancies
 from services.database import DatabaseHandler
 from services.osm_service import get_city_by_location
+from pprint import pprint
 from handlers.subscription_handlers import add_subscription_handler, list_subscriptions_handler, remove_subscription_handler, clear_subscriptions_handler
 from utils.parse_salary import parse_salary
 
@@ -11,9 +13,11 @@ from utils.parse_salary import parse_salary
 CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, SEARCH, HISTORY = range(6)
 
 # Предопределенные города
-CITIES = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"]
+CITIES = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань", "Другой город"]
+POSITIONS_PER_PAGE = 4
 # Предопределенные должности
-POSITIONS = ["Разработчик", "Дизайнер", "Менеджер", "Аналитик", "Тестировщик"]
+POSITIONS = ["Разработчик", "Дизайнер", "Менеджер",
+ "Аналитик", "Тестировщик", "DevOps-инженер", "Андроид-разработчик", "Ios-разработчик", "C++ developer", "C# dev"]
 # Предопределенные диапазоны зарплат
 SALARY_RANGES = ["Не важно", "0-30,000", "30,000-60,000", "60,000-100,000", "Более 100,000"]
 
@@ -73,6 +77,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ConversationHandler.END
             
         exp_dist = stats['experience_distribution']
+        skills = stats['skills_counter']
+        skills_top5 = skills[:5]
+        skils_last3 = skills[-4:-1]
         total_exp = sum(exp_dist.values()) if sum(exp_dist.values()) > 0 else 1
         
         message = (f"📊 Аналитика по вакансиям:\n"
@@ -89,7 +96,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                   f"- Без опыта: {exp_dist['no_experience']} ({round(exp_dist['no_experience']/total_exp*100)}%)\n"
                   f"- 1-3 года: {exp_dist['1-3_years']} ({round(exp_dist['1-3_years']/total_exp*100)}%)\n"
                   f"- 3-6 лет: {exp_dist['3-6_years']} ({round(exp_dist['3-6_years']/total_exp*100)}%)\n"
-                  f"- Более 6 лет: {exp_dist['more_than_6']} ({round(exp_dist['more_than_6']/total_exp*100)}%)")
+                  f"- Более 6 лет: {exp_dist['more_than_6']} ({round(exp_dist['more_than_6']/total_exp*100)}%)\n\n"
+                  f"📊 Статистика навыков (на основе 50 вакансий):\n"
+                  f"🔥 Топ-3 самых частых:\n"
+                  f"- {skills_top5[0][0]} - {skills_top5[0][1]} упоминаний ({round(skills_top5[0][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skills_top5[1][0]} - {skills_top5[1][1]} упоминаний ({round(skills_top5[1][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skills_top5[2][0]} - {skills_top5[2][1]} упоминаний ({round(skills_top5[2][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skills_top5[3][0]} - {skills_top5[3][1]} упоминаний ({round(skills_top5[3][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skills_top5[4][0]} - {skills_top5[4][1]} упоминаний ({round(skills_top5[4][1] / 50 * 100)}% вакансий)\n"
+                  f"🛠 Редкие, но полезные:\n"
+                  f"- {skils_last3[0][0]} - {skils_last3[0][1]} ({round(skils_last3[0][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skils_last3[1][0]} - {skils_last3[1][1]} ({round(skils_last3[1][1] / 50 * 100)}% вакансий)\n"
+                  f"💡 Рекомендации:\n"
+                  f"* {skills_top5[0][0]}, {skills_top5[1][0]} и {skills_top5[2][0]} - ключевые навыки для {position}."
+        )
                   
         await update.message.reply_text(message)
         return ConversationHandler.END
@@ -117,12 +137,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_city_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать пользователю выбор города для поиска вакансий."""
     # Создаем клавиатуру с кнопками городов и определением местоположения
-    keyboard = [[KeyboardButton(city)] for city in CITIES]
-    keyboard.append([KeyboardButton("Другой город")])
+    keyboard = [[KeyboardButton(CITIES[i]),KeyboardButton(CITIES[i+1]) ] for i in range(0, len(CITIES), 2)]
     keyboard.append([KeyboardButton("Определить местоположение", request_location=True)])
 
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("Выберите город для поиска вакансий:", reply_markup=reply_markup)
+    await update.message.reply_text("Выберите город для поиска вакансий или напишите его вручную", reply_markup=reply_markup)
 
 
 async def city_selection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -131,7 +150,6 @@ async def city_selection_handler(update: Update, context: ContextTypes.DEFAULT_T
         # Получаем координаты
         lat = update.message.location.latitude
         lon = update.message.location.longitude
-        
         # Определяем город по координатам
         city = await get_city_by_location(lat, lon)
         if not city:
@@ -173,54 +191,100 @@ async def custom_city_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     return POSITION
 
 
-async def show_position_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать пользователю выбор должности для поиска вакансий."""
+async def show_position_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
+    """Показать пользователю выбор должности с пагинацией."""
+    # Вычисляем диапазон должностей для текущей страницы
+    start_idx = page * POSITIONS_PER_PAGE
+    end_idx = start_idx + POSITIONS_PER_PAGE
+    current_positions = POSITIONS[start_idx:end_idx]
+    
     # Создаем клавиатуру с кнопками должностей
-    keyboard = [[KeyboardButton(position)] for position in POSITIONS]
+    keyboard = [[KeyboardButton(current_positions[i]), KeyboardButton(current_positions[i+1])] for i in range(0, len(current_positions), 2)]
+    
+    # Добавляем кнопки навигации
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(KeyboardButton("← Назад"))
+    if end_idx < len(POSITIONS):
+        nav_buttons.append(KeyboardButton("Еще →"))
+    
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+    
     keyboard.append([KeyboardButton("Другая должность")])
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+    await update.message.reply_text(
+        "Выберите должность для поиска вакансий",
+        reply_markup=reply_markup
+    )
+    # Сохраняем текущую страницу
+    context.user_data['current_page'] = page
 
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("Выберите должность для поиска вакансий:", reply_markup=reply_markup)
+def validate_position_symbols(position: str) -> bool:
+    """Validate job title contains only allowed characters."""
+    pattern = r'^[a-zA-Zа-яА-ЯёЁ\s-]+$'
+    return bool(re.fullmatch(pattern, position))
 
+def validate_position_length(position: str) -> bool:
+    """Validate job title length"""
+    length = len(position)
+    return 2 <= length <= 30
 
 async def handle_position_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик выбора должности."""
-    position = update.message.text
-
-    if position == "Другая должность":
-        await update.message.reply_text("Пожалуйста, введите желаемую должность:")
+    """Обработчик выбора должности с учетом пагинации."""
+    text = update.message.text
+    current_page = context.user_data.get('current_page', 0)
+    
+    if text == "← Назад":
+        await show_position_selection(update, context, page=current_page - 1)
+        return
+    
+    if text == "Еще →":
+        await show_position_selection(update, context, page=current_page + 1)
+        return
+    
+    if text == "Другая должность":
+        await update.message.reply_text(
+            "Пожалуйста, введите желаемую должность:",
+            reply_markup=ReplyKeyboardRemove()
+        )
         context.user_data['awaiting_custom_position'] = True
-        return POSITION
-
-    # Сохраняем выбранную должность
-    context.user_data['position'] = position
-
-    await update.message.reply_text(f"Вы выбрали должность: {position}")
-    await show_salary_selection(update, context)
-    return SALARY
-
-
-async def handle_position_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ввода пользовательской должности."""
-    position = update.message.text
-
-    # Проверяем, ожидаем ли мы ввод города
-    if context.user_data.get('awaiting_custom_city', False):
-        context.user_data['awaiting_custom_city'] = False
-        return await custom_city_handler(update, context)
-
-    # Проверяем, ожидаем ли мы ввод должности
+        return
+    
+    # Handle custom position input with validation
     if context.user_data.get('awaiting_custom_position', False):
+        if not validate_position_symbols(text):
+            await update.message.reply_text(
+                "Некорректное название должности. Используйте только буквы, пробелы и дефисы.\n"
+                "Пожалуйста, введите должность снова:"
+            )
+            return
+        
+        if not validate_position_length(text):
+            await update.message.reply_text(
+                "Название должности слишком короткое (длинное). Введите не менее 2 и не более 30 символов\n"
+                "Пожалуйста, введите должность снова:"
+            )
+            return
+        
         context.user_data['awaiting_custom_position'] = False
-        # Сохраняем введенную должность
-        context.user_data['position'] = position
-
-        await update.message.reply_text(f"Вы выбрали должность: {position}")
+        context.user_data['position'] = text
+        await update.message.reply_text(
+            f"Вы выбрали должность: {text}",
+            reply_markup=ReplyKeyboardRemove()
+        )
         await show_salary_selection(update, context)
         return SALARY
-
-    # Если мы не ожидаем ни город, ни должность, проверяем, может это кнопка из главного меню
-    return await button_handler(update, context)
+    
+    # Сохраняем выбранную должность
+    context.user_data['position'] = text
+    await update.message.reply_text(
+        f"Вы выбрали должность: {text}",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    await show_salary_selection(update, context)
+    return SALARY
 
 
 async def show_salary_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -289,7 +353,6 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Получаем вакансии через API HH.ru
     vacancies_data = await fetch_vacancies(position, city_id, salary_from, salary_to, per_page=number_of_vacancies)
-
     if not vacancies_data:
         await update.message.reply_text("К сожалению, не удалось получить вакансии. Попробуйте позже.")
         return
@@ -337,7 +400,8 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data[f'vacancy_{vacancy["id"]}'] = vacancy
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton('Добавить в избранное', callback_data=f'add_fav:{vacancy["id"]}')]
+            [InlineKeyboardButton('Добавить в избранное', callback_data=f'add_fav:{vacancy["id"]}')],
+            [InlineKeyboardButton('🔍 Похожие вакансии', callback_data=f'related:{vacancy["id"]}')]
         ])
         await update.message.reply_text(vacancy_text, reply_markup=keyboard)
 
@@ -355,6 +419,46 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Хотите выполнить новый поиск или воспользоваться другими функциями?",
                                     reply_markup=reply_markup)
 
+async def show_related_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE, vacancy_id: str):
+    """Запрос и отображение похожих вакансий."""
+    await update.callback_query.message.reply_text("Ищем похожие вакансии...")
+
+    try:
+        # Запрос к API HH
+        related_data = await fetch_related_vacancies(vacancy_id)
+        if not related_data:
+            await update.callback_query.message.reply_text("Похожих вакансий не найдено.")
+            return
+
+        # Парсинг и вывод (аналогично основному поиску)
+        vacancies = parse_vacancies(related_data)
+        for vacancy in vacancies[:2]:  # Ограничим вывод 2 вакансиями
+            salary_info = "Не указана"
+            if vacancy.get("salary"):
+                salary_from = vacancy["salary"].get("from", "")
+                salary_to = vacancy["salary"].get("to", "")
+                salary_currency = vacancy["salary"].get("currency", "")
+
+                if salary_from and salary_to:
+                    salary_info = f"{salary_from} - {salary_to} {salary_currency}"
+                elif salary_from:
+                    salary_info = f"от {salary_from} {salary_currency}"
+                elif salary_to:
+                    salary_info = f"до {salary_to} {salary_currency}"
+            text = (f"🔹 {vacancy['title']}\n"
+                    f"Компания: {vacancy['company']}\n"
+                    f"Зарплата: {salary_info}\n"
+                    f"Ссылка: {vacancy['url']}")
+            keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton('Добавить в избранное', callback_data=f'add_fav:{vacancy["id"]}')],
+            [InlineKeyboardButton('🔍 Похожие вакансии', callback_data=f'related:{vacancy["id"]}')]
+        ])
+            await update.callback_query.message.reply_text(text, reply_markup=keyboard)
+    
+    except Exception as e:
+        log_error(f"Ошибка при поиске похожих вакансий: {e}")
+        await update.callback_query.message.reply_text("Произошла ошибка. Попробуйте позже.")
+
 # --- Новый CallbackQueryHandler для избранного ---
 async def favorite_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -365,7 +469,9 @@ async def favorite_callback_handler(update: Update, context: ContextTypes.DEFAUL
     action = data[0]
     vacancy_id = data[1]
     db_id = int(data[2]) if len(data) > 2 else None
-
+    
+    if action == "related":
+        await show_related_vacancies(update, context, vacancy_id)
     if action == 'add_fav':
         # vacancy_data должен быть сохранён в context.user_data при показе вакансий
         vacancy_data = context.user_data.get(f'vacancy_{vacancy_id}')

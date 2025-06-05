@@ -2,7 +2,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackQueryHandler
 from handlers.start_handler import (
     start, button_handler, city_selection_handler, handle_position_selection,
-    handle_position_input, salary_selection_handler, show_city_selection, number_of_vacancies_handler,
+    salary_selection_handler, show_city_selection, number_of_vacancies_handler,
     CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, HISTORY,
     favorite_callback_handler, history_callback_handler
 )
@@ -27,7 +27,7 @@ def main():
         entry_points=[MessageHandler(filters.Regex('^Поиск вакансий$'), button_handler)],
         states={
             CITY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, city_selection_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND | filters.LOCATION, city_selection_handler),
             ],
             POSITION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_position_selection),
@@ -51,8 +51,8 @@ def main():
     # Обработчик для других кнопок главного меню
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
 
-    # Добавляем CallbackQueryHandler для избранного
-    application.add_handler(CallbackQueryHandler(favorite_callback_handler, pattern=r'^(add_fav|remove_fav):'))
+    # Добавляем CallbackQueryHandler для избранного и похожих вакансий
+    application.add_handler(CallbackQueryHandler(favorite_callback_handler, pattern=r'^(add_fav|remove_fav|related):'))
 
     # Добавляем CallbackQueryHandler для истории поиска
     application.add_handler(CallbackQueryHandler(history_callback_handler, pattern=r'^history:'))
