@@ -69,7 +69,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         await update.message.reply_text("Собираем аналитику...")
         
-        stats = await get_vacancies_stats(position, city_id, count=50)
+        count = 100
+        stats = await get_vacancies_stats(position, city_id, count=count)
         
         if stats['vacancies_count'] == 0:
             await update.message.reply_text("Не удалось собрать аналитику")
@@ -98,14 +99,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                   f"- Более 6 лет: {exp_dist['more_than_6']} ({round(exp_dist['more_than_6']/total_exp*100)}%)\n\n"
                   f"📊 Статистика навыков (на основе 50 вакансий):\n"
                   f"🔥 Топ-3 самых частых:\n"
-                  f"- {skills_top5[0][0]} - {skills_top5[0][1]} упоминаний ({round(skills_top5[0][1] / 50 * 100)}% вакансий)\n"
-                  f"- {skills_top5[1][0]} - {skills_top5[1][1]} упоминаний ({round(skills_top5[1][1] / 50 * 100)}% вакансий)\n"
-                  f"- {skills_top5[2][0]} - {skills_top5[2][1]} упоминаний ({round(skills_top5[2][1] / 50 * 100)}% вакансий)\n"
-                  f"- {skills_top5[3][0]} - {skills_top5[3][1]} упоминаний ({round(skills_top5[3][1] / 50 * 100)}% вакансий)\n"
-                  f"- {skills_top5[4][0]} - {skills_top5[4][1]} упоминаний ({round(skills_top5[4][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skills_top5[0][0]} - {skills_top5[0][1]} упоминаний ({round(skills_top5[0][1] / count * 100)}% вакансий)\n"
+                  f"- {skills_top5[1][0]} - {skills_top5[1][1]} упоминаний ({round(skills_top5[1][1] / count * 100)}% вакансий)\n"
+                  f"- {skills_top5[2][0]} - {skills_top5[2][1]} упоминаний ({round(skills_top5[2][1] / count * 100)}% вакансий)\n"
+                  f"- {skills_top5[3][0]} - {skills_top5[3][1]} упоминаний ({round(skills_top5[3][1] / count * 100)}% вакансий)\n"
+                  f"- {skills_top5[4][0]} - {skills_top5[4][1]} упоминаний ({round(skills_top5[4][1] / count * 100)}% вакансий)\n"
                   f"🛠 Редкие, но полезные:\n"
-                  f"- {skils_last3[0][0]} - {skils_last3[0][1]} ({round(skils_last3[0][1] / 50 * 100)}% вакансий)\n"
-                  f"- {skils_last3[1][0]} - {skils_last3[1][1]} ({round(skils_last3[1][1] / 50 * 100)}% вакансий)\n"
+                  f"- {skils_last3[0][0]} - {skils_last3[0][1]} ({round(skils_last3[0][1] / count * 100)}% вакансий)\n"
+                  f"- {skils_last3[1][0]} - {skils_last3[1][1]} ({round(skils_last3[1][1] / count * 100)}% вакансий)\n"
                   f"💡 Рекомендации:\n"
                   f"* {skills_top5[0][0]}, {skills_top5[1][0]} и {skills_top5[2][0]} - ключевые навыки для {position}."
         )
