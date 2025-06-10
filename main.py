@@ -6,7 +6,10 @@ from handlers.start_handler import (
     CITY, POSITION, SALARY, NUMBER_OF_VACANCIES, HISTORY,
     favorite_callback_handler, history_callback_handler
 )
-from handlers.subscription_handlers import add_subscription_handler, list_subscriptions_handler, remove_subscription_handler, clear_subscriptions_handler
+from handlers.subscription_handlers import (
+    add_subscription_handler, get_subscriptions_to_remove, cancel_unsubscription,
+    unsubscribe_handler, GET_SUBSCRIPTIONS_NUMBERS
+    )
 from utils.logger import log_warning
 import os
 from dotenv import load_dotenv
@@ -46,7 +49,23 @@ def main():
         name="job_search_conversation",
         persistent=False
     )
+
+
+    unsubscribe_conv = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex('^Отписаться$') & ~filters.COMMAND, unsubscribe_handler)],
+        states={
+            GET_SUBSCRIPTIONS_NUMBERS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex('^Отмена$'), get_subscriptions_to_remove)
+            ],
+        },
+        fallbacks=[MessageHandler(filters.Regex('^Отмена$') | filters.COMMAND, cancel_unsubscription)],
+        name="unsubscribe_conversation",
+        persistent=False
+    )
+
     application.add_handler(job_search_conv)
+
+    application.add_handler(unsubscribe_conv)
 
     # Обработчик для других кнопок главного меню
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))

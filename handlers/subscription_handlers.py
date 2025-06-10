@@ -5,6 +5,9 @@ from telegram.ext import ContextTypes, ConversationHandler
 from services.database import DatabaseHandler
 from utils.parse_salary import parse_salary
 
+# Определение состояний для ConversationHandler
+GET_SUBSCRIPTIONS_NUMBERS = 0
+
 async def add_subscription_handler(
     db: DatabaseHandler,
     update: Update,
@@ -77,6 +80,17 @@ async def list_subscriptions_handler(
         await update.message.reply_text('У вас пока нет активных подписок')
         return
     
+    keyboard = [
+        [KeyboardButton("Поиск вакансий")],
+        [KeyboardButton("Избранное")],
+        [KeyboardButton("История поиска")],
+        [
+            KeyboardButton("Аналитика"), 
+            KeyboardButton("Отписаться")
+        ]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
     message_text = "📋 Ваши активные подписки:\n\n"
     for index, sub in enumerate(subscriptions, start=1):
         message_text += (
@@ -88,37 +102,72 @@ async def list_subscriptions_handler(
     
     await update.message.reply_text(
         text=message_text,
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )
 
-async def remove_subscription_handler(
-    db: DatabaseHandler,
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    subscription_id: int
-) -> Dict[str, str]:
-    """Handle subscription removal"""
-    query = update.callback_query
-    await query.answer()
+async def unsubscribe_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [KeyboardButton("Отмена")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text("Укажите через пробел номера подписок, которые вы хотите отменить.",
+                                    reply_markup=reply_markup)
+    return GET_SUBSCRIPTIONS_NUMBERS
 
-    success = db.remove_subscription(subscription_id)
-    return {
-        'success': success,
-        'message': '✅ Подписка удалена!' if success else '❌ Ошибка удаления подписки'
-    }
-
-async def clear_subscriptions_handler(
-    db: DatabaseHandler,
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-) -> Dict[str, str]:
-    """Handle clearing all subscriptions"""
-    query = update.callback_query
-    await query.answer()
+async def get_subscriptions_to_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [KeyboardButton("Поиск вакансий")],
+        [KeyboardButton("Избранное")],
+        [KeyboardButton("История поиска")],
+        [
+            KeyboardButton("Аналитика"), 
+            KeyboardButton("Подписки")
+        ]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
     user_id = update.effective_user.id
-    success = db.clear_all_subscriptions(user_id)
-    return {
-        'success': success,
-        'message': '✅ Все подписки удалены!' if success else '❌ Ошибка очистки подписок'
-    }
+    try:
+        subscriptions_numbers = [int(x) for x in update.message.text.split()]
+    except Exception:
+        await update.message.reply_text("Неверный формат. Введите через пробел номера подписок для удаления.")
+        return GET_SUBSCRIPTIONS_NUMBERS
+    
+    db = DatabaseHandler()
+    subscriptions = db.get_active_subscriptions(user_id)
+    for sub in subscriptions_numbers:
+        try:
+            sub_id = subscriptions[sub - 1]["id"]
+        except Exception:
+            await update.message.reply_text(f"Ошибка удаления подписки №{sub}")
+        if db.remove_subscription(user_id, sub_id):
+            continue
+        else:
+            await update.message.reply_text("❌ Ошибка удаления подписок",reply_markup=reply_markup)
+            return ConversationHandler.END
+    
+    await update.message.reply_text("✅ Подписки удалены!",reply_markup=reply_markup)
+    return ConversationHandler.END
+
+async def cancel_unsubscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [KeyboardButton("Поиск вакансий")],
+        [KeyboardButton("Избранное")],
+        [KeyboardButton("История поиска")],
+        [
+            KeyboardButton("Аналитика"), 
+            KeyboardButton("Подписки")
+        ]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    await update.message.reply_text(
+        "Выбери действие:\n\n"
+        "🔍 Поиск вакансий\n"
+        "⭐ Избранное\n"
+        "⏳ История поиска\n"
+        "📊 Аналитика и подписки",
+        reply_markup=reply_markup
+    )
+    return ConversationHandler.END

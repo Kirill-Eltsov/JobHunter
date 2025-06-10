@@ -5,8 +5,7 @@ from utils.logger import log_warning, log_info, log_error
 from services.hh_service import fetch_vacancies, parse_vacancies, get_vacancies_stats, get_city_id_by_city_name, fetch_related_vacancies
 from services.database import DatabaseHandler
 from services.osm_service import get_city_by_location
-from pprint import pprint
-from handlers.subscription_handlers import add_subscription_handler, list_subscriptions_handler, remove_subscription_handler, clear_subscriptions_handler
+from handlers.subscription_handlers import add_subscription_handler, list_subscriptions_handler
 from utils.parse_salary import parse_salary
 
 # Определение состояний для ConversationHandler
@@ -516,6 +515,7 @@ async def show_search_history(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     db_handler = DatabaseHandler()
     history, total_count = db_handler.get_search_history(user_id, page=page)
+    # print('/n'*5 + "history = " + '/n'*5)
     db_handler.close()
 
     if not history:
