@@ -1,3 +1,5 @@
+from datetime import datetime
+from sqlite3.dbapi2 import Timestamp
 import aiohttp
 import asyncio
 import statistics
@@ -8,7 +10,7 @@ from async_lru import alru_cache
 from pprint import pprint
 import re
 
-async def fetch_vacancies(keyword, area=None, salary_from=None, salary_to=None, per_page=5):
+async def fetch_vacancies(keyword, area=None, salary_from=None, salary_to=None, per_page=5, date_from:datetime =None):
     """Асинхронное получение вакансий с hh.ru по заданным параметрам."""
     params = {
         "text": keyword,
@@ -21,6 +23,8 @@ async def fetch_vacancies(keyword, area=None, salary_from=None, salary_to=None, 
         params["salary_from"] = salary_from
     if salary_to:
         params["salary_to"] = salary_to
+    if date_from:
+        params["date_from"] = date_from
 
     log_info(f"Запрос вакансий с параметрами: {params}")
 

@@ -22,15 +22,17 @@ async def add_subscription_handler(
     salary_from, salary_to = parse_salary(context.user_data.get('salary', 'Не указана'))
     salary_min=salary_from
     salary_max=salary_to
-    location=context.user_data.get('city', 'Не указан')
+    city=context.user_data.get('city')
+    city_id=context.user_data.get('city_id', 'Не указан')
     
     user_id = update.effective_user.id
     success = db.add_subscription(
         user_id=user_id,
         position=position,
+        city=city,
         salary_min=salary_min,
         salary_max=salary_max,
-        location=location
+        city_id=city_id,
     )
     
     # Форматируем информацию о зарплате
@@ -41,7 +43,7 @@ async def add_subscription_handler(
         salary_range = f" с зарплатой {min_salary} - {max_salary}"
     
     # Форматируем информацию о локации
-    location_text = f" в {location}" if location else ""
+    location_text = f" в {city}" if city else ""
     
     keyboard = [
         [KeyboardButton("Поиск вакансий")],
@@ -74,7 +76,7 @@ async def list_subscriptions_handler(
 ) -> None:
     """Handle subscription listing and send response directly to user"""
     user_id = update.effective_user.id
-    subscriptions = db.get_active_subscriptions(user_id)
+    subscriptions = db.get_user_subscriptions(user_id)
     
     if not subscriptions:
         await update.message.reply_text('У вас пока нет активных подписок')
@@ -95,7 +97,7 @@ async def list_subscriptions_handler(
     for index, sub in enumerate(subscriptions, start=1):
         message_text += (
             f"{index}. 🔹 Должность: {sub['position']}\n"
-            f"   📍 Локация: {sub['location'] or 'Не указана'}\n"
+            f"   📍 Локация: {sub['city'] or 'Не указана'}\n"
             f"   💰 Зарплата: {sub['salary_min'] or '?'}-{sub['salary_max'] or '?'}\n"
             f"   📅 Создана: {sub['created_at'].strftime('%d.%m.%Y')}\n\n"
     )
@@ -135,7 +137,7 @@ async def get_subscriptions_to_remove(update: Update, context: ContextTypes.DEFA
         return GET_SUBSCRIPTIONS_NUMBERS
     
     db = DatabaseHandler()
-    subscriptions = db.get_active_subscriptions(user_id)
+    subscriptions = db.get_user_subscriptions(user_id)
     for sub in subscriptions_numbers:
         try:
             sub_id = subscriptions[sub - 1]["id"]

@@ -11,17 +11,6 @@ class DatabaseHandler:
         """Initialize database tables if they don't exist"""
         try:
             self.db.execute_query("""
-                CREATE TABLE IF NOT EXISTS subscriptions (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER NOT NULL,
-                    position TEXT NOT NULL,
-                    city TEXT NOT NULL,
-                    salary_range TEXT,
-                    last_checked BIGINT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, position, city, salary_range)
-                );
-
                 CREATE TABLE IF NOT EXISTS favorites (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
@@ -69,10 +58,11 @@ class DatabaseHandler:
                     position TEXT NOT NULL,  -- вместо search_query
                     salary_min INTEGER,
                     salary_max INTEGER,  -- переименовано для ясности
-                    location TEXT,  -- более гибко чем city (может быть регион/страна)
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_vacancy_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, position, location)  -- предотвращает дубли
+                    city_id INTEGER,
+                    city TEXT,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    last_vacancy_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, position, city_id, salary_min, salary_max)  -- предотвращает дубли
                 )
             """)
         except Exception as e:
@@ -227,22 +217,22 @@ class DatabaseHandler:
             print(f"Error getting search history: {e}")
             return [], 0
         
-    def add_subscription(self, user_id: int, position: str, 
-                   salary_min: int = None, salary_max: int = None,
-                   location: str = None) -> bool:
+    def add_subscription(self, user_id: int, position: str, city: str,
+                   salary_min: int = None, salary_max: int = None, 
+                   city_id: int = None) -> bool:
         """Add new subscription with clear parameters"""
         try:
             self.db.execute_query("""
                 INSERT INTO subscriptions 
-                (user_id, position, salary_min, salary_max, location)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (user_id, position, salary_min, salary_max, location))
+                (user_id, position, salary_min, salary_max, city_id, city)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (user_id, position, salary_min, salary_max, city_id, city))
             return True
         except Exception as e:
             print(f"Subscription exists or error: {e}")
             return False
 
-    def get_active_subscriptions(self, user_id: int) -> List[Dict[str, Optional[str | int | datetime]]]:
+    def get_user_subscriptions(self, user_id: int) -> List[Dict[str, Optional[str | int | datetime]]]:
         """Get all active subscriptions for specified user.
         
         Args:
@@ -255,8 +245,9 @@ class DatabaseHandler:
                     'id': int,
                     'position': str,
                     'salary_min': Optional[int],
-                    'salary_max': Optional[int], 
-                    'location': Optional[str],
+                    'salary_max': Optional[int],
+                    'city_id': int, 
+                    'city': Optional[str],
                     'created_at': datetime
                 },
                 ...
@@ -271,7 +262,8 @@ class DatabaseHandler:
                     position,
                     salary_min, 
                     salary_max,
-                    location,
+                    city_id,
+                    city,
                     created_at
                 FROM subscriptions
                 WHERE user_id = %s
@@ -289,35 +281,72 @@ class DatabaseHandler:
                 'position': row[1],
                 'salary_min': row[2],
                 'salary_max': row[3],
-                'location': row[4],
-                'created_at': row[5]
+                'city_id': row[4],
+                'city': row[5],
+                'created_at': row[6]
             } for row in rows]
             
         except Exception as e:
             print(f"Error fetching subscriptions for user {user_id}: {str(e)}")
             return []
 
-        def remove_subscription(self, subscription_id: int) -> bool:
-            """Remove specific subscription by its ID.
-            
-            Args:
-                subscription_id: ID of subscription to remove
-                
-            Returns:
-                bool: True if subscription was deleted, False if error occurred
-            """
+
+    def get_all_subscriptions(self) -> list[dict] | None:
+        """
+        Получает список всех активных подписок из базы данных
+        
+        Returns:
+            list[dict]: Список подписок в формате:
+                {
+                    "id": int, 
+                    "user_id": int,
+                    "position": str,
+                    "salary_min": int | None,
+                    "salary_max": int | None,
+                    "city_id": int,
+                    "city": str | None,
+                    "created_at": datetime,
+                    "last_vacancy_time": datetime
+                }
+            None: В случае ошибки
+        """
         try:
-            self.db.execute_query(
+            result = self.db.execute_query(
                 """
-                DELETE FROM subscriptions
-                WHERE id = %s
+                SELECT 
+                    id,
+                    user_id,
+                    position,
+                    salary_min,
+                    salary_max,
+                    city_id,
+                    city,
+                    created_at,
+                    last_vacancy_time
+                FROM subscriptions
                 """,
-                (subscription_id,)
+                fetch=True
             )
-            return True
+            
+            return [
+                {
+                    "id": row[0],
+                    "user_id": row[1],
+                    "position": row[2],
+                    "salary_min": row[3],
+                    "salary_max": row[4],
+                    "city_id": row[5],
+                    "city": row[6],
+                    "created_at": row[7],
+                    "last_vacancy_time": row[8]
+                }
+                for row in result
+            ] if result else []
+        
         except Exception as e:
-            print(f"Error removing subscription {subscription_id}: {e}")
-            return False
+            print(f"Error fetching subscriptions: {e}")
+            return None
+
 
     def clear_all_subscriptions(self, user_id: int) -> bool:
         """Remove all subscriptions for specified user.
@@ -352,6 +381,19 @@ class DatabaseHandler:
             print(f"Error removing subscription: {e}")
             return False
         
+
+    def update_last_vacancy_time(self, id: int) -> bool:
+        """Update the last vacancy check time for a user to current timestamp"""
+        try:
+            return self.db.execute_query("""
+                UPDATE subscriptions 
+                SET last_vacancy_time = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """, (id,))
+        except Exception as e:
+            print(f"Error updating last vacancy time for subscription {id}: {e}")
+            return False
+
 
     def close(self):
         """Close all database connections"""

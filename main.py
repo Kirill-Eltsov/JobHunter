@@ -21,6 +21,7 @@ from handlers.subscription_handlers import (
 from utils.logger import log_warning
 import os
 from dotenv import load_dotenv
+from services.subscriptions import post_init
 
 load_dotenv()
 
@@ -28,7 +29,7 @@ TOKEN = os.getenv('MY_TOKEN')
 
 def main():
     """Запускает бота."""
-    application = ApplicationBuilder().token(TOKEN).build()
+    application = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
 
     # Обработчик команды /start
     application.add_handler(CommandHandler("start", start))
